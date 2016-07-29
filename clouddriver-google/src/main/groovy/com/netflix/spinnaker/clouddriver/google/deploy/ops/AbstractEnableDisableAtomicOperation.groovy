@@ -102,7 +102,11 @@ abstract class AbstractEnableDisableAtomicOperation implements AtomicOperation<V
         }
       }
     } else {
-      task.updateStatus phaseName, "Registering instances with load balancers..."
+      task.updateStatus phaseName, "Registering server group with Http(s) load balancers..."
+
+      GCEUtil.addHttpLoadBalancerBackends(compute, project, serverGroup, googleLoadBalancerProvider, task, phaseName)
+
+      task.updateStatus phaseName, "Registering instances with network load balancers..."
 
       def groupInstances =
         isRegional

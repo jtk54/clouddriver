@@ -32,6 +32,7 @@ import com.netflix.spinnaker.clouddriver.google.deploy.exception.GoogleOperation
 import com.netflix.spinnaker.clouddriver.google.deploy.exception.GoogleResourceNotFoundException
 import com.netflix.spinnaker.clouddriver.google.model.*
 import com.netflix.spinnaker.clouddriver.google.model.callbacks.Utils
+import com.netflix.spinnaker.clouddriver.google.model.loadbalancing.GoogleLoadBalancedBackend
 import com.netflix.spinnaker.clouddriver.google.model.loadbalancing.GoogleLoadBalancerType
 import com.netflix.spinnaker.clouddriver.google.model.loadbalancing.GoogleLoadBalancerView
 import com.netflix.spinnaker.clouddriver.google.provider.view.GoogleClusterProvider
@@ -685,6 +686,41 @@ class GCEUtil {
       return new HttpHealthCheck(
           name: name
       )
+    }
+  }
+
+  static void addHttpLoadBalancerBackends(Compute compute,
+                                          String project,
+                                          GoogleServerGroup.View serverGroup,
+                                          GoogleLoadBalancerProvider googleLoadBalancerProvider,
+                                          Task task,
+                                          String phase) {
+    String serverGroupName = serverGroup.name
+    Metadata instanceMetadata = serverGroup?.launchConfig?.instanceTemplate?.properties?.metadata
+    Map metadataMap = buildMapFromMetadata(instanceMetadata)
+    def httpLoadBalancersInMetadata = metadataMap?.(GoogleServerGroup.View.GLOBAL_LOAD_BALANCER_NAMES)?.split(",") ?: []
+    def networkLoadBalancersInMetadata = metadataMap?.(GoogleServerGroup.View.REGIONAL_LOAD_BALANCER_NAMES)?.split(",") ?: []
+
+    def allFoundLoadBalancers = (httpLoadBalancersInMetadata + networkLoadBalancersInMetadata) as List<String>
+    def httpLoadBalancersToAddTo = queryAllLoadBalancers(googleLoadBalancerProvider, allFoundLoadBalancers,
+                                                         task, phase)
+        .findAll { GoogleLoadBalancerType.valueOf(it.loadBalancerType) == GoogleLoadBalancerType.HTTP }
+
+    // TODO(jacobkiefer): add GoogleLoadBalancingPolicy to description and to this aux function.
+    if (httpLoadBalancersToAddTo) {
+      List<String> backendServiceNames = metadataMap?.(GoogleServerGroup.View.BACKEND_SERVICE_NAMES)?.split(",") ?: []
+      if (backendServiceNames) {
+        backendServiceNames.each { String backendServiceName ->
+          BackendService backendService = compute.backendServices().get(project, backendServiceName).execute()
+          if (serverGroup.regional) {
+            backendService.backends << new Backend(group: buildRegionalServerGroupUrl(project, serverGroup.region, serverGroupName))
+          } else {
+            backendService.backends << new Backend(group: buildZonalServerGroupUrl(project, serverGroup.zone, serverGroupName))
+          }
+          compute.backendServices().update(project, backendServiceName, backendService).execute()
+          task.updateStatus phase, "Enabled backend for server group ${serverGroupName} in Http(s) load balancer backend service ${backendServiceName}."
+        }
+      }
     }
   }
 

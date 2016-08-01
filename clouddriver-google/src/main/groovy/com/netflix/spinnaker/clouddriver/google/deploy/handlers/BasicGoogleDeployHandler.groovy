@@ -301,7 +301,12 @@ class BasicGoogleDeployHandler implements DeployHandler<BasicGoogleDeployDescrip
 
         Backend backendToAdd
         def loadBalancingPolicy = description.loadBalancingPolicy
+        println ",, lb policy: ${loadBalancingPolicy}"
         if (loadBalancingPolicy?.balancingMode) {
+          println ",, we have a balancing mode"
+          println ",, balancing mode: ${loadBalancingPolicy?.balancingMode}"
+          println ",, max rpi: ${loadBalancingPolicy?.maxRatePerInstance}"
+          println ",, max utilization: ${loadBalancingPolicy?.maxUtilization}"
           def balancingMode = loadBalancingPolicy.balancingMode
           backendToAdd = new Backend(
               balancingMode: balancingMode,
@@ -315,6 +320,7 @@ class BasicGoogleDeployHandler implements DeployHandler<BasicGoogleDeployDescrip
         } else {
           backendToAdd = new Backend()
         }
+        println ",, we wound up with backend: ${backendToAdd}"
 
         if (isRegional) {
           backendToAdd.setGroup(GCEUtil.buildRegionalServerGroupUrl(project, region, serverGroupName))
@@ -322,6 +328,7 @@ class BasicGoogleDeployHandler implements DeployHandler<BasicGoogleDeployDescrip
           backendToAdd.setGroup(GCEUtil.buildZonalServerGroupUrl(project, zone, serverGroupName))
         }
         backendService.backends << backendToAdd
+        println ",, added backend: ${backendToAdd}"
         compute.backendServices().update(project, backendServiceName, backendService).execute()
         task.updateStatus BASE_PHASE, "Done associating server group $serverGroupName with backend service $backendServiceName."
       }

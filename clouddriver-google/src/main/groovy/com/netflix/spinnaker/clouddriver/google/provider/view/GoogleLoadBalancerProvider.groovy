@@ -111,6 +111,7 @@ class GoogleLoadBalancerProvider implements LoadBalancerProvider<GoogleLoadBalan
       switch (loadBalancer.type) {
         case GoogleLoadBalancerType.HTTP:
           def isDisabledFromHttp = Utils.determineHttpLoadBalancerDisabledState(loadBalancer, serverGroup)
+          println ",, svg ${serverGroup.name} is disabled <${isDisabledFromHttp}> according to call..."
           isDisabled = serverGroup.asg.get(GoogleServerGroup.View.REGIONAL_LOAD_BALANCER_NAMES) ? // We assume these are L4 load balancers, and the state has been calculated on the way to the cache.
             isDisabledFromHttp && serverGroup.disabled : isDisabledFromHttp
           break

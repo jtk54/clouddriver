@@ -102,16 +102,16 @@ abstract class AbstractEnableDisableAtomicOperation implements AtomicOperation<V
     }
 
     if (disable) {
-      task.updateStatus phaseName, "Deregistering server group from Http(s) load balancers..."
+      task.updateStatus phaseName, "Draining server group from Http(s) load balancers..."
 
       safeRetry.doRetry(
-        destroyHttpLoadBalancerBackends(compute, project, serverGroup, googleLoadBalancerProvider, task, phaseName),
-        "destroy",
+        drainHttpLoadBalancerBackends(compute, project, serverGroup, googleLoadBalancerProvider, task, phaseName),
+        "drain",
         "Http load balancer backends",
         task,
         phaseName,
         RETRY_ERROR_CODES,
-        SUCCESSFUL_ERROR_CODES
+        []
       )
 
       task.updateStatus phaseName, "Deregistering server group from internal load balancers..."
@@ -175,11 +175,11 @@ abstract class AbstractEnableDisableAtomicOperation implements AtomicOperation<V
         }
       }
     } else {
-      task.updateStatus phaseName, "Registering server group with Http(s) load balancers..."
+      task.updateStatus phaseName, "Enabling server group with Http(s) load balancers..."
 
       safeRetry.doRetry(
-        addHttpLoadBalancerBackends(compute, objectMapper, project, serverGroup, googleLoadBalancerProvider, task, phaseName),
-        "add",
+        enableHttpLoadBalancerBackends(compute, objectMapper, project, serverGroup, googleLoadBalancerProvider, task, phaseName),
+        "enable",
         "Http load balancer backends",
         task,
         phaseName,
@@ -318,9 +318,16 @@ abstract class AbstractEnableDisableAtomicOperation implements AtomicOperation<V
     TaskRepository.threadLocalTask.get()
   }
 
-  Closure destroyHttpLoadBalancerBackends(compute, project, serverGroup, googleLoadBalancerProvider, task, phaseName) {
+  Closure drainHttpLoadBalancerBackends(compute, project, serverGroup, googleLoadBalancerProvider, task, phaseName) {
     return {
-      GCEUtil.destroyHttpLoadBalancerBackends(compute, project, serverGroup, googleLoadBalancerProvider, task, phaseName)
+      GCEUtil.setCapacityScalerForBackends(compute, objectMapper, project, serverGroup, googleLoadBalancerProvider, task, phaseName, false /* enable = false -> disable */)
+      null
+    }
+  }
+
+  Closure enableHttpLoadBalancerBackends(compute, project, serverGroup, googleLoadBalancerProvider, task, phaseName) {
+    return {
+      GCEUtil.setCapacityScalerForBackends(compute, objectMapper, project, serverGroup, googleLoadBalancerProvider, task, phaseName, true /* enable */)
       null
     }
   }
@@ -335,13 +342,6 @@ abstract class AbstractEnableDisableAtomicOperation implements AtomicOperation<V
   Closure destroySslLoadBalancerBackends(compute, project, serverGroup, googleLoadBalancerProvider, task, phaseName) {
     return {
       GCEUtil.destroySslLoadBalancerBackends(compute, project, serverGroup, googleLoadBalancerProvider, task, phaseName)
-      null
-    }
-  }
-
-  Closure addHttpLoadBalancerBackends(compute, objectMapper, project, serverGroup, googleLoadBalancerProvider, task, phaseName) {
-    return {
-      GCEUtil.addHttpLoadBalancerBackends(compute, objectMapper, project, serverGroup, googleLoadBalancerProvider, task, phaseName)
       null
     }
   }

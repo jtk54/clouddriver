@@ -265,11 +265,14 @@ class Utils {
     List<List<GoogleLoadBalancedBackend>> serviceBackends = getBackendServicesFromHttpLoadBalancerView(loadBalancer.view)
         .findAll { it.name in backendServicesFromMetadata }
         .collect { it.backends }
-    List<String> backendGroupNames = serviceBackends.flatten()
-        .findAll { serverGroup.region == Utils.getRegionFromGroupUrl(it.serverGroupUrl) }
-        .collect { GCEUtil.getLocalName(it.serverGroupUrl) }
+    // NOTE: We're calculating _enabled_ backends here, since a server group has zero enabled server groups to be disabled.
+    List<GoogleLoadBalancedBackend> enabledBackends = serviceBackends.flatten().findAll { GoogleLoadBalancedBackend backend ->
+      GoogleLoadBalancingPolicy policy = backend.policy
+      policy && policy.capacityScaler != 0.0 as Float && serverGroup.region == getRegionFromGroupUrl(backend.serverGroupUrl)
+    }
 
-    return loadBalancer.name in httpLoadBalancersFromMetadata && !(serverGroup.name in backendGroupNames)
+    // If the LB name appears in the metadata and there are no enabled backends, server group is disabled.
+    return loadBalancer.name in httpLoadBalancersFromMetadata && !enabledBackends
   }
 
   static String getNetworkNameFromInstanceTemplate(InstanceTemplate instanceTemplate) {

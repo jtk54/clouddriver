@@ -24,9 +24,7 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.HttpHeaders
 import com.google.api.client.http.HttpRequest
 import com.google.api.client.http.HttpRequestInitializer
-import com.google.api.client.json.GenericJson
 import com.google.api.services.compute.Compute
-import com.google.api.services.compute.Compute.InstanceGroupManagers.AggregatedList
 import com.google.api.services.compute.model.*
 import com.netflix.spinnaker.cats.cache.Cache
 import com.netflix.spinnaker.cats.cache.RelationshipCacheFilter
@@ -752,59 +750,6 @@ class GCEUtil {
     }
   }
 
-  static void addHttpLoadBalancerBackends(Compute compute,
-                                          ObjectMapper objectMapper,
-                                          String project,
-                                          GoogleServerGroup.View serverGroup,
-                                          GoogleLoadBalancerProvider googleLoadBalancerProvider,
-                                          Task task,
-                                          String phase) {
-    String serverGroupName = serverGroup.name
-    Metadata instanceMetadata = serverGroup?.launchConfig?.instanceTemplate?.properties?.metadata
-    Map metadataMap = buildMapFromMetadata(instanceMetadata)
-    def httpLoadBalancersInMetadata = metadataMap?.(GoogleServerGroup.View.GLOBAL_LOAD_BALANCER_NAMES)?.tokenize(",") ?: []
-    def networkLoadBalancersInMetadata = metadataMap?.(GoogleServerGroup.View.REGIONAL_LOAD_BALANCER_NAMES)?.tokenize(",") ?: []
-
-    def allFoundLoadBalancers = (httpLoadBalancersInMetadata + networkLoadBalancersInMetadata) as List<String>
-    def httpLoadBalancersToAddTo = queryAllLoadBalancers(googleLoadBalancerProvider, allFoundLoadBalancers, task, phase)
-        .findAll { it.loadBalancerType == GoogleLoadBalancerType.HTTP }
-    if (!httpLoadBalancersToAddTo) {
-      log.warn("Cache call missed for Http load balancers ${httpLoadBalancersInMetadata}, making a call to GCP")
-      List<ForwardingRule> projectGlobalForwardingRules = compute.globalForwardingRules().list(project).execute().getItems()
-      httpLoadBalancersToAddTo = projectGlobalForwardingRules.findAll { ForwardingRule forwardingRule ->
-        forwardingRule.target && Utils.getTargetProxyType(forwardingRule.target) != GoogleTargetProxyType.SSL &&
-          forwardingRule.name in serverGroup.loadBalancers
-      }
-    }
-
-    if (httpLoadBalancersToAddTo) {
-      String policyJson = metadataMap?.(GoogleServerGroup.View.LOAD_BALANCING_POLICY)
-      if (!policyJson) {
-        updateStatusAndThrowNotFoundException("Load Balancing Policy not found for server group ${serverGroupName}", task, phase)
-      }
-      GoogleHttpLoadBalancingPolicy policy = objectMapper.readValue(policyJson, GoogleHttpLoadBalancingPolicy)
-
-      List<String> backendServiceNames = metadataMap?.(GoogleServerGroup.View.BACKEND_SERVICE_NAMES)?.split(",") ?: []
-      if (backendServiceNames) {
-        backendServiceNames.each { String backendServiceName ->
-          BackendService backendService = compute.backendServices().get(project, backendServiceName).execute()
-          Backend backendToAdd = backendFromLoadBalancingPolicy(policy)
-          if (serverGroup.regional) {
-            backendToAdd.setGroup(buildRegionalServerGroupUrl(project, serverGroup.region, serverGroupName))
-          } else {
-            backendToAdd.setGroup(buildZonalServerGroupUrl(project, serverGroup.zone, serverGroupName))
-          }
-          if (backendService.backends == null) {
-            backendService.backends = []
-          }
-          backendService.backends << backendToAdd
-          compute.backendServices().update(project, backendServiceName, backendService).execute()
-          task.updateStatus phase, "Enabled backend for server group ${serverGroupName} in Http(s) load balancer backend service ${backendServiceName}."
-        }
-      }
-    }
-  }
-
   static void addSslLoadBalancerBackends(Compute compute,
                                          ObjectMapper objectMapper,
                                          String project,
@@ -960,6 +905,67 @@ class GCEUtil {
         }
         compute.regionBackendServices().update(project, region, backendServiceName, backendService).execute()
         task.updateStatus phase, "Deleted backend for server group ${serverGroupName} from internal load balancer backend service ${backendServiceName}."
+      }
+    }
+  }
+
+  static void setCapacityScalerForBackends(Compute compute,
+                                           ObjectMapper objectMapper,
+                                           String project,
+                                           GoogleServerGroup.View serverGroup,
+                                           GoogleLoadBalancerProvider googleLoadBalancerProvider,
+                                           Task task,
+                                           String phase,
+                                           Boolean enable) {
+    def serverGroupName = serverGroup.name
+    def httpLoadBalancersInMetadata = serverGroup?.asg?.get(GoogleServerGroup.View.GLOBAL_LOAD_BALANCER_NAMES) ?: []
+    log.debug("Attempting to drain backends for ${serverGroup.name} for the following Http load balancers: ${httpLoadBalancersInMetadata}")
+
+    log.debug("Looking up the following Http load balancers in the cache: ${httpLoadBalancersInMetadata}")
+    def foundHttpLoadBalancers = googleLoadBalancerProvider.getApplicationLoadBalancers("").findAll {
+      it.name in serverGroup.loadBalancers && it.loadBalancerType == GoogleLoadBalancerType.HTTP
+    }
+    if (!foundHttpLoadBalancers) {
+      log.warn("Cache call missed for Http load balancers ${httpLoadBalancersInMetadata}, making a call to GCP")
+      List<ForwardingRule> projectGlobalForwardingRules = compute.globalForwardingRules().list(project).execute().getItems()
+      foundHttpLoadBalancers = projectGlobalForwardingRules.findAll { ForwardingRule forwardingRule ->
+        forwardingRule.target && Utils.getTargetProxyType(forwardingRule.target) != GoogleTargetProxyType.SSL &&
+          forwardingRule.name in serverGroup.loadBalancers
+      }
+    }
+
+    def notDeleted = httpLoadBalancersInMetadata - (foundHttpLoadBalancers.collect { it.name })
+    if (notDeleted) {
+      log.warn("Could not locate the following Http load balancers: ${notDeleted}. Proceeding with other backend deletions without mutating them.")
+    }
+
+    if (foundHttpLoadBalancers) {
+      Metadata instanceMetadata = serverGroup?.launchConfig?.instanceTemplate?.properties?.metadata
+      Map metadataMap = buildMapFromMetadata(instanceMetadata)
+      List<String> backendServiceNames = metadataMap?.(GoogleServerGroup.View.BACKEND_SERVICE_NAMES)?.split(",")
+
+      String policyJson = metadataMap?.(GoogleServerGroup.View.LOAD_BALANCING_POLICY)
+      if (!policyJson) {
+        updateStatusAndThrowNotFoundException("Load Balancing Policy not found for server group ${serverGroupName}", task, phase)
+      }
+      GoogleHttpLoadBalancingPolicy policy = objectMapper.readValue(policyJson, GoogleHttpLoadBalancingPolicy)
+
+      if (backendServiceNames) {
+        backendServiceNames.each { String backendServiceName ->
+          BackendService backendService = compute.backendServices().get(project, backendServiceName).execute()
+
+          backendService?.backends?.findAll { Backend backend ->
+            (getLocalName(backend.group) == serverGroupName) &&
+              (Utils.getRegionFromGroupUrl(backend.group) == serverGroup.region)
+          }?.each { Backend backend ->
+            println ",, capacity scaler before: ${backend.getCapacityScaler()}"
+            backend.capacityScaler = enable ? policy.capacityScaler : new Float(0.0)
+            println ",, capacity scaler after: ${backend.getCapacityScaler()}"
+          }
+
+          compute.backendServices().update(project, backendServiceName, backendService).execute()
+          task.updateStatus phase, "Drained backend for server group ${serverGroupName} in Http(s) load balancer backend service ${backendServiceName}."
+        }
       }
     }
   }

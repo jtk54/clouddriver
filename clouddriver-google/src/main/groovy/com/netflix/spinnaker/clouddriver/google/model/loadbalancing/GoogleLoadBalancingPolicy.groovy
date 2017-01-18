@@ -16,6 +16,9 @@
 
 package com.netflix.spinnaker.clouddriver.google.model.loadbalancing
 
+import groovy.transform.ToString
+
+@ToString
 class GoogleLoadBalancingPolicy {
 
   BalancingMode balancingMode
@@ -25,4 +28,11 @@ class GoogleLoadBalancingPolicy {
     RATE,
     UTILIZATION,
   }
+
+  /**
+   * Additional scaler option that sets the current max usage of the server group for either balancingMode.
+   * Valid values are 0.0 through 1.0.
+   * https://cloud.google.com/compute/docs/load-balancing/http/backend-service#add_instance_groups_to_a_backend_service
+   */
+  Float capacityScaler
 }

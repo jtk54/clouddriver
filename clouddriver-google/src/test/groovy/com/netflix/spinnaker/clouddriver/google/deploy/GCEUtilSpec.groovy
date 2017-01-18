@@ -502,8 +502,8 @@ class GCEUtilSpec extends Specification {
       }
 
     when:
-      GCEUtil.addHttpLoadBalancerBackends(computeMock, new ObjectMapper(), PROJECT_NAME, serverGroup,
-        googleLoadBalancerProviderMock, task, "PHASE")
+      GCEUtil.setCapacityScalerForBackends(computeMock, new ObjectMapper(), PROJECT_NAME, serverGroup,
+        googleLoadBalancerProviderMock, task, "PHASE", false /* disable */)
 
     then:
       _ * computeMock.backendServices() >> backendServicesMock

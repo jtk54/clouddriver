@@ -16,6 +16,7 @@
 
 package com.netflix.spinnaker.clouddriver.google.deploy
 
+import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.api.client.googleapis.batch.BatchRequest
 import com.google.api.client.googleapis.batch.json.JsonBatchCallback
@@ -24,9 +25,7 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.HttpHeaders
 import com.google.api.client.http.HttpRequest
 import com.google.api.client.http.HttpRequestInitializer
-import com.google.api.client.json.GenericJson
 import com.google.api.services.compute.Compute
-import com.google.api.services.compute.Compute.InstanceGroupManagers.AggregatedList
 import com.google.api.services.compute.model.*
 import com.netflix.spinnaker.cats.cache.Cache
 import com.netflix.spinnaker.cats.cache.RelationshipCacheFilter
@@ -778,17 +777,18 @@ class GCEUtil {
     }
 
     if (httpLoadBalancersToAddTo) {
-      String policyJson = metadataMap?.(GoogleServerGroup.View.LOAD_BALANCING_POLICY)
-      if (!policyJson) {
+      String policyMapJson = metadataMap?.(GoogleServerGroup.View.LOAD_BALANCING_POLICY)
+      if (!policyMapJson) {
         updateStatusAndThrowNotFoundException("Load Balancing Policy not found for server group ${serverGroupName}", task, phase)
       }
-      GoogleHttpLoadBalancingPolicy policy = objectMapper.readValue(policyJson, GoogleHttpLoadBalancingPolicy)
+      // backend service names -> load balancing policy
+      Map<String, GoogleHttpLoadBalancingPolicy> policyMap = objectMapper.readValue(policyMapJson, new TypeReference<Map<String, GoogleHttpLoadBalancingPolicy>>() {})
 
       List<String> backendServiceNames = metadataMap?.(GoogleServerGroup.View.BACKEND_SERVICE_NAMES)?.split(",") ?: []
       if (backendServiceNames) {
         backendServiceNames.each { String backendServiceName ->
           BackendService backendService = compute.backendServices().get(project, backendServiceName).execute()
-          Backend backendToAdd = backendFromLoadBalancingPolicy(policy)
+          Backend backendToAdd = backendFromLoadBalancingPolicy(policyMap[backendServiceName])
           if (serverGroup.regional) {
             backendToAdd.setGroup(buildRegionalServerGroupUrl(project, serverGroup.region, serverGroupName))
           } else {
@@ -831,17 +831,18 @@ class GCEUtil {
     }
 
     if (sslLoadBalancersToAddTo) {
-      String policyJson = metadataMap?.(GoogleServerGroup.View.LOAD_BALANCING_POLICY)
-      if (!policyJson) {
+      String policyMapJson = metadataMap?.(GoogleServerGroup.View.LOAD_BALANCING_POLICY)
+      if (!policyMapJson) {
         updateStatusAndThrowNotFoundException("Load Balancing Policy not found for server group ${serverGroupName}", task, phase)
       }
-      GoogleHttpLoadBalancingPolicy policy = objectMapper.readValue(policyJson, GoogleHttpLoadBalancingPolicy)
+      // backend service names -> load balancing policy
+      Map<String, GoogleHttpLoadBalancingPolicy> policyMap = objectMapper.readValue(policyMapJson, new TypeReference<Map<String, GoogleHttpLoadBalancingPolicy>>() {})
 
       sslLoadBalancersToAddTo.each { GoogleLoadBalancerView loadBalancerView ->
         def sslView = loadBalancerView as GoogleSslLoadBalancer.View
         String backendServiceName = sslView.backendService.name
         BackendService backendService = compute.backendServices().get(project, backendServiceName).execute()
-        Backend backendToAdd = backendFromLoadBalancingPolicy(policy)
+        Backend backendToAdd = backendFromLoadBalancingPolicy(policyMap[backendServiceName])
         if (serverGroup.regional) {
           backendToAdd.setGroup(buildRegionalServerGroupUrl(project, serverGroup.region, serverGroupName))
         } else {

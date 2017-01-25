@@ -16,6 +16,7 @@
 
 package com.netflix.spinnaker.clouddriver.google.deploy.handlers
 
+import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.api.services.compute.Compute
 import com.google.api.services.compute.model.*
@@ -197,6 +198,9 @@ class BasicGoogleDeployHandler implements DeployHandler<BasicGoogleDeployDescrip
     // load balancing policy this server group was configured with.
     // If we try to execute the update, GCP will fail since the MIG is not created yet.
     List<BackendService> backendServicesToUpdate = []
+    // Single load balancing policy to write to metadata for all backend services joined.
+    // TODO(jacobkiefer): Possibly support a load balancing policy per backend service?
+    GoogleHttpLoadBalancingPolicy loadBalancingPolicyToWrite
     if (hasBackendServices) {
       List<String> backendServices = instanceMetadata[GoogleServerGroup.View.BACKEND_SERVICE_NAMES]?.split(",") ?: []
       backendServices.addAll(sslLoadBalancers.collect { it.backendService.name })
@@ -213,19 +217,19 @@ class BasicGoogleDeployHandler implements DeployHandler<BasicGoogleDeployDescrip
 
         Backend backendToAdd
         if (loadBalancingPolicy?.balancingMode) {
-          instanceMetadata[(GoogleServerGroup.View.LOAD_BALANCING_POLICY)] = objectMapper.writeValueAsString(loadBalancingPolicy)
+          loadBalancingPolicyToWrite = loadBalancingPolicyToWrite ?: loadBalancingPolicy
           backendToAdd = GCEUtil.backendFromLoadBalancingPolicy(loadBalancingPolicy)
         } else if (sourcePolicyJson) {
-          // We don't have to update the metadata here, since we are reading these properties directly from it.
-          backendToAdd = GCEUtil.backendFromLoadBalancingPolicy(objectMapper.readValue(sourcePolicyJson, GoogleHttpLoadBalancingPolicy))
+          // We don't have to update the loadBalancingPolicy metadata here, since we are reading these properties directly from it.
+          Map<String, GoogleHttpLoadBalancingPolicy> policyMap = objectMapper.readValue(sourcePolicyJson, new TypeReference<Map<String, GoogleHttpLoadBalancingPolicy>>() {})
+          GoogleHttpLoadBalancingPolicy bsPolicy = policyMap[backendServiceName]
+          backendToAdd = GCEUtil.backendFromLoadBalancingPolicy(bsPolicy)
         } else {
-          instanceMetadata[(GoogleServerGroup.View.LOAD_BALANCING_POLICY)] = objectMapper.writeValueAsString(
-            // Sane defaults in case of a create with no LoadBalancingPolicy specified.
-            new GoogleHttpLoadBalancingPolicy(
-              balancingMode: GoogleLoadBalancingPolicy.BalancingMode.UTILIZATION,
-              maxUtilization: 0.80,
-              capacityScaler: 1.0,
-            )
+          // Sane defaults in case of a create with no LoadBalancingPolicy specified.
+          loadBalancingPolicyToWrite = loadBalancingPolicyToWrite ?: new GoogleHttpLoadBalancingPolicy(
+            balancingMode: GoogleLoadBalancingPolicy.BalancingMode.UTILIZATION,
+            maxUtilization: 0.80,
+            capacityScaler: 1.0,
           )
           backendToAdd = new Backend()
         }
@@ -273,6 +277,15 @@ class BasicGoogleDeployHandler implements DeployHandler<BasicGoogleDeployDescrip
         backendService.backends << backendToAdd
         regionBackendServicesToUpdate << backendService
       }
+    }
+
+    if (loadBalancingPolicyToWrite) {
+      // TODO(jacobkiefer): Possibly support a load balancing policy per backend service?
+      // backend service names -> load balancing policy
+      Map<String, GoogleHttpLoadBalancingPolicy> metadataEntry = [:]
+      backendServicesToUpdate.each { metadataEntry[it.getName()] = loadBalancingPolicyToWrite }
+      regionBackendServicesToUpdate.each { metadataEntry[it.getName()] = loadBalancingPolicyToWrite }
+      instanceMetadata[(GoogleServerGroup.View.LOAD_BALANCING_POLICY)] = objectMapper.writeValueAsString(metadataEntry)
     }
 
     def metadata = GCEUtil.buildMetadataFromMap(instanceMetadata)

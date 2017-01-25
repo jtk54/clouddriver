@@ -544,7 +544,8 @@ class GoogleZonalServerGroupCachingAgent extends AbstractGoogleCachingAgent impl
         serverGroup.asg.put(BACKEND_SERVICE_NAMES, backendServiceList)
       }
       if (policyJson) {
-        serverGroup.asg.put(LOAD_BALANCING_POLICY, objectMapper.readValue(policyJson, GoogleHttpLoadBalancingPolicy))
+        // backend service names -> load balancing policy
+        serverGroup.asg.put(LOAD_BALANCING_POLICY, objectMapper.readValue(policyJson, new TypeReference<Map<String, GoogleHttpLoadBalancingPolicy>>() {}))
       }
 
       if (regionalLBNameList) {

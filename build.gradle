@@ -21,11 +21,12 @@ buildscript {
   repositories {
     jcenter()
     maven { url "http://spinnaker.bintray.com/gradle" }
+    flatDir dirs: "../spinnaker-gradle-project/build/libs"
   }
   dependencies {
-    classpath 'com.netflix.spinnaker.gradle:spinnaker-gradle-project:3.10.0'
-    // classpath "org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}"
-    classpath files('/usr/local/google/home/jacobkiefer/spinnaker_projects/spinnaker-gradle-project/build/libs/spinnaker-gradle-project-3.11.0-SNAPSHOT.jar')
+    classpath 'com.netflix.spinnaker.gradle:spinnaker-gradle-project:3.11.0-SNAPSHOT'
+    // classpath files('../spinnaker-gradle-project/build/libs/spinnaker-gradle-project-3.11.0-SNAPSHOT.jar')
+    classpath "org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}"
   }
 }
 

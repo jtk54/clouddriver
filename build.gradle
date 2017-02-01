@@ -21,11 +21,10 @@ buildscript {
   repositories {
     jcenter()
     maven { url "http://spinnaker.bintray.com/gradle" }
-    flatDir dirs: "../spinnaker-gradle-project/build/libs"
+    mavenLocal()
   }
   dependencies {
     classpath 'com.netflix.spinnaker.gradle:spinnaker-gradle-project:3.11.0-SNAPSHOT'
-    // classpath files('../spinnaker-gradle-project/build/libs/spinnaker-gradle-project-3.11.0-SNAPSHOT.jar')
     classpath "org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}"
   }
 }
@@ -47,12 +46,8 @@ allprojects {
     }
   }
 
-  def localVersions = checkLocalVersions.findAll { it.value.endsWith('-SNAPSHOT') }
-  if (localVersions) {
-    logger.info("Enabling mavenLocal repo for $localVersions")
-    repositories {
-      mavenLocal()
-    }
+  repositories {
+    mavenLocal()
   }
 
   spinnaker {

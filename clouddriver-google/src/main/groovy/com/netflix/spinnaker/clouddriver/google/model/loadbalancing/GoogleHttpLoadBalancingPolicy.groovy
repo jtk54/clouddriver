@@ -17,6 +17,7 @@
 package com.netflix.spinnaker.clouddriver.google.model.loadbalancing
 
 import com.fasterxml.jackson.annotation.JsonIgnore
+import groovy.transform.Canonical
 
 /**
  * For Http(s), balancingMode must be either UTILIZATION or RATE.
@@ -25,6 +26,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore
  * For Ssl, balancingMode must be either UTILIZATION or CONNECTION.
  * maxUtilization must be set if UTILIZATION, maxConnectionsPerInstance if CONNECTION.
  */
+@Canonical
 class GoogleHttpLoadBalancingPolicy extends GoogleLoadBalancingPolicy {
   @JsonIgnore
   static final String HTTP_PORT_NAME = 'http'

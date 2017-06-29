@@ -77,7 +77,9 @@ class GoogleLoadBalancerProvider implements LoadBalancerProvider<GoogleLoadBalan
         loadBalancer = objectMapper.convertValue(loadBalancerCacheData.attributes, GoogleInternalLoadBalancer)
         break
       case GoogleLoadBalancerType.HTTP:
+        println ",, http lb cache attributes: ${loadBalancerCacheData.attributes}"
         loadBalancer = objectMapper.convertValue(loadBalancerCacheData.attributes, GoogleHttpLoadBalancer)
+        println ",, http lb unserialized: ${loadBalancer}"
         break
       case GoogleLoadBalancerType.NETWORK:
         loadBalancer = objectMapper.convertValue(loadBalancerCacheData.attributes, GoogleNetworkLoadBalancer)

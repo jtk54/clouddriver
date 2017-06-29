@@ -331,6 +331,7 @@ abstract class AbstractEnableDisableAtomicOperation extends GoogleAtomicOperatio
     TaskRepository.threadLocalTask.get()
   }
 
+  // TODO(jacobkiefer): Rename this to match capacity drain.
   Closure destroyHttpLoadBalancerBackends(compute, project, serverGroup, googleLoadBalancerProvider, task, phaseName) {
     return {
       GCEUtil.destroyHttpLoadBalancerBackends(compute, project, serverGroup, googleLoadBalancerProvider, task, phaseName, this)

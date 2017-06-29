@@ -861,16 +861,17 @@ class GCEUtil {
             compute.backendServices().get(project, backendServiceName),
             "compute.backendServices.get",
             executor.TAG_SCOPE, executor.SCOPE_GLOBAL)
-          Backend backendToAdd = backendFromLoadBalancingPolicy(policy)
-          if (serverGroup.regional) {
-            backendToAdd.setGroup(buildRegionalServerGroupUrl(project, serverGroup.region, serverGroupName))
-          } else {
-            backendToAdd.setGroup(buildZonalServerGroupUrl(project, serverGroup.zone, serverGroupName))
+
+          println ",, backends: ${backendService?.backends}"
+          List<Backend> serverGroupBackends = backendService?.backends?.findAll { Backend backend ->
+            (getLocalName(backend.group) == serverGroupName) &&
+              (Utils.getRegionFromGroupUrl(backend.group) == serverGroup.region)
           }
-          if (backendService.backends == null) {
-            backendService.backends = []
+
+          serverGroupBackends?.each { Backend backend ->
+            backend.setCapacityScaler(policy.getCapacityScaler())
           }
-          backendService.backends << backendToAdd
+
         executor.timeExecute(
             compute.backendServices().update(project, backendServiceName, backendService),
             "compute.backendServices.update",
@@ -1073,6 +1074,7 @@ class GCEUtil {
     }
   }
 
+  // TODO(jacobkiefer): Rename this to match capacity drain.
   static void destroyHttpLoadBalancerBackends(Compute compute,
                                               String project,
                                               GoogleServerGroup.View serverGroup,
@@ -1082,7 +1084,7 @@ class GCEUtil {
                                               GoogleExecutorTraits executor) {
     def serverGroupName = serverGroup.name
     def httpLoadBalancersInMetadata = serverGroup?.asg?.get(GoogleServerGroup.View.GLOBAL_LOAD_BALANCER_NAMES) ?: []
-    log.debug("Attempting to delete backends for ${serverGroup.name} from the following Http load balancers: ${httpLoadBalancersInMetadata}")
+    log.debug("Attempting to drain traffic for ${serverGroup.name} from the following Http load balancers: ${httpLoadBalancersInMetadata}")
 
     log.debug("Looking up the following Http load balancers in the cache: ${httpLoadBalancersInMetadata}")
     def foundHttpLoadBalancers = googleLoadBalancerProvider.getApplicationLoadBalancers("").findAll {
@@ -1112,19 +1114,35 @@ class GCEUtil {
       List<String> backendServiceNames = metadataMap?.(GoogleServerGroup.View.BACKEND_SERVICE_NAMES)?.split(",")
       if (backendServiceNames) {
         backendServiceNames.each { String backendServiceName ->
+
           BackendService backendService = executor.timeExecute(
             compute.backendServices().get(project, backendServiceName),
             "compute.backendService.get",
             executor.TAG_SCOPE, executor.SCOPE_GLOBAL)
-          backendService?.backends?.removeAll { Backend backend ->
+
+          List<Backend> serverGroupBackends = backendService?.backends?.findAll { Backend backend ->
             (getLocalName(backend.group) == serverGroupName) &&
                 (Utils.getRegionFromGroupUrl(backend.group) == serverGroup.region)
           }
+
+          List<Backend> updatedBackends = serverGroupBackends?.collect { Backend backend ->
+            backend.setCapacityScaler(new Float(0))
+            backend
+          }
+
+          def updatedBackendService = new BackendService(backendService)
+          updatedBackendService.setBackends(updatedBackends)
+          println ",, previous: ${backendService}"
+          println ",, after: ${updatedBackendService}"
+
           executor.timeExecute(
-              compute.backendServices().update(project, backendServiceName, backendService),
+              compute.backendServices().update(project, backendServiceName, updatedBackendService),
               "compute.backendServices.update",
               executor.TAG_SCOPE, executor.SCOPE_GLOBAL)
           task.updateStatus phase, "Deleted backend for server group ${serverGroupName} from Http(s) load balancer backend service ${backendServiceName}."
+
+
+
         }
       }
     }

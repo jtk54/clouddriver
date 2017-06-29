@@ -16,11 +16,14 @@
 
 package com.netflix.spinnaker.clouddriver.google.model.loadbalancing
 
+import groovy.transform.Canonical
+
+@Canonical
 class GoogleLoadBalancingPolicy {
 
   BalancingMode balancingMode
 
-  public static enum BalancingMode {
+  static enum BalancingMode {
     CONNECTION,
     RATE,
     UTILIZATION,

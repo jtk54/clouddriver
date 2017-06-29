@@ -260,16 +260,19 @@ class Utils {
 
   static boolean determineHttpLoadBalancerDisabledState(GoogleHttpLoadBalancer loadBalancer,
                                                         GoogleServerGroup serverGroup) {
-    def httpLoadBalancersFromMetadata = serverGroup.asg.get(GoogleServerGroup.View.GLOBAL_LOAD_BALANCER_NAMES)
     def backendServicesFromMetadata = serverGroup.asg.get(GoogleServerGroup.View.BACKEND_SERVICE_NAMES)
-    List<List<GoogleLoadBalancedBackend>> serviceBackends = getBackendServicesFromHttpLoadBalancerView(loadBalancer.view)
+
+    println ",, http lb view: ${loadBalancer.view}"
+    List<GoogleLoadBalancedBackend> serviceBackends = getBackendServicesFromHttpLoadBalancerView(loadBalancer.view)
         .findAll { it.name in backendServicesFromMetadata }
         .collect { it.backends }
-    List<String> backendGroupNames = serviceBackends.flatten()
-        .findAll { serverGroup.region == Utils.getRegionFromGroupUrl(it.serverGroupUrl) }
-        .collect { GCEUtil.getLocalName(it.serverGroupUrl) }
+        .flatten()
 
-    return loadBalancer.name in httpLoadBalancersFromMetadata && !(serverGroup.name in backendGroupNames)
+    List<GoogleHttpLoadBalancingPolicy> serverGroupPolicies = serviceBackends
+        .findAll { serverGroup.region == getRegionFromGroupUrl(it.serverGroupUrl) && serverGroup.name == getLocalName(it.serverGroupUrl) }
+        .collect { it.policy as GoogleHttpLoadBalancingPolicy }
+
+    return serverGroupPolicies.every { it.capacityScaler == 0.0 }
   }
 
   static String decorateXpnResourceIdIfNeeded(String managedProjectId, String xpnResource) {

@@ -375,9 +375,11 @@ class GoogleHttpLoadBalancerCachingAgent extends AbstractGoogleLoadBalancerCachi
       backendService.backends?.each { Backend backend ->
         def resourceGroup = new ResourceGroupReference()
         resourceGroup.setGroup(backend.group)
+        def batch = compute.batch()
         compute.backendServices()
             .getHealth(project, backendService.name, resourceGroup)
-            .queue(groupHealthRequest, groupHealthCallback)
+            .queue(batch, groupHealthCallback)
+        batch.execute()
       }
 
       backendService.healthChecks?.each { String healthCheckURL ->

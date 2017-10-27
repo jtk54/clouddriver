@@ -1,4 +1,7 @@
 dependencies {
   compile project(":clouddriver-core")
-  spinnaker.group('google')
+//  spinnaker.group('google')
+  compile "com.google.apis:google-api-services-compute:alpha-rev44-1.22.0"
+  compile "com.google.http-client:google-http-client-jackson2:1.20.0"
+  compile "com.google.apis:google-api-services-storage:v1-rev86-1.22.0"
 }

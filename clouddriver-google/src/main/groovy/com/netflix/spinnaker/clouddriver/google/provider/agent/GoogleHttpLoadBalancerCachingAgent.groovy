@@ -202,7 +202,7 @@ class GoogleHttpLoadBalancerCachingAgent extends AbstractGoogleLoadBalancerCachi
   }
 
   // Note: The TargetProxyCallbacks assume that each proxy points to a unique urlMap.
-  class TargetHttpsProxyCallback<TargetHttpsProxy> extends JsonBatchCallback<TargetHttpsProxy> implements FailedSubjectChronicler {
+  class TargetHttpsProxyCallback<TargetHttpsProxy> extends JsonBatchCallback<TargetHttpsProxy> implements FailureLogger {
     GoogleHttpLoadBalancer googleLoadBalancer
     BatchRequest urlMapRequest
 
@@ -231,7 +231,7 @@ class GoogleHttpLoadBalancerCachingAgent extends AbstractGoogleLoadBalancerCachi
   }
 
   // Note: The TargetProxyCallbacks assume that each proxy points to a unique urlMap.
-  class TargetProxyCallback<TargetHttpProxy> extends JsonBatchCallback<TargetHttpProxy> implements FailedSubjectChronicler {
+  class TargetProxyCallback<TargetHttpProxy> extends JsonBatchCallback<TargetHttpProxy> implements FailureLogger {
     GoogleHttpLoadBalancer googleLoadBalancer
     BatchRequest urlMapRequest
 
@@ -258,7 +258,7 @@ class GoogleHttpLoadBalancerCachingAgent extends AbstractGoogleLoadBalancerCachi
     }
   }
 
-  class UrlMapCallback<UrlMap> extends JsonBatchCallback<UrlMap> implements FailedSubjectChronicler {
+  class UrlMapCallback<UrlMap> extends JsonBatchCallback<UrlMap> implements FailureLogger {
     GoogleHttpLoadBalancer googleLoadBalancer
     BatchRequest backendServiceRequest
 
@@ -401,7 +401,7 @@ class GoogleHttpLoadBalancerCachingAgent extends AbstractGoogleLoadBalancerCachi
     }
   }
 
-  class HttpsHealthCheckCallback<HttpsHealthCheck> extends JsonBatchCallback<HttpsHealthCheck> implements FailedSubjectChronicler {
+  class HttpsHealthCheckCallback<HttpsHealthCheck> extends JsonBatchCallback<HttpsHealthCheck> implements FailureLogger {
     List<GoogleBackendService> googleBackendServices
 
     @Override
@@ -421,7 +421,7 @@ class GoogleHttpLoadBalancerCachingAgent extends AbstractGoogleLoadBalancerCachi
     }
   }
 
-  class HttpHealthCheckCallback<HttpHealthCheck> extends JsonBatchCallback<HttpHealthCheck> implements FailedSubjectChronicler {
+  class HttpHealthCheckCallback<HttpHealthCheck> extends JsonBatchCallback<HttpHealthCheck> implements FailureLogger {
     List<GoogleBackendService> googleBackendServices
 
     @Override
@@ -441,7 +441,7 @@ class GoogleHttpLoadBalancerCachingAgent extends AbstractGoogleLoadBalancerCachi
     }
   }
 
-  class GroupHealthCallback<BackendServiceGroupHealth> extends JsonBatchCallback<BackendServiceGroupHealth> implements FailedSubjectChronicler {
+  class GroupHealthCallback<BackendServiceGroupHealth> extends JsonBatchCallback<BackendServiceGroupHealth> implements FailureLogger {
     GoogleHttpLoadBalancer googleLoadBalancer
 
     @Override

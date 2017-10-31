@@ -16,6 +16,7 @@
 
 package com.netflix.spinnaker.clouddriver
 
+import com.google.api.client.http.HttpTransport
 import com.netflix.spinnaker.clouddriver.security.config.SecurityConfig
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration
@@ -29,6 +30,10 @@ import org.springframework.scheduling.annotation.EnableScheduling
 import sun.net.InetAddressCachePolicy
 
 import java.security.Security
+import java.util.logging.Handler
+import java.util.logging.Level
+import java.util.logging.LogRecord
+import java.util.logging.Logger
 
 @Configuration
 @Import([
@@ -66,6 +71,7 @@ class Main extends SpringBootServletInitializer {
 
   static void main(String... args) {
     launchArgs = args
+    enableLogging() // Maybe this will work?
     new SpringApplicationBuilder().properties(DEFAULT_PROPS).sources(Main).run(args)
   }
 
@@ -75,5 +81,28 @@ class Main extends SpringBootServletInitializer {
   }
 
   static String[] launchArgs = []
+
+  static void enableLogging() {
+    Logger logger = Logger.getLogger(HttpTransport.class.getName())
+    logger.setLevel(Level.CONFIG)
+    logger.addHandler(new Handler() {
+
+      @Override
+      void close() throws SecurityException {
+      }
+
+      @Override
+      void flush() {
+      }
+
+      @Override
+      void publish(LogRecord record) {
+        // default ConsoleHandler will print = INFO to System.err
+        if (record.getLevel().intValue() < Level.INFO.intValue()) {
+          println(record.getMessage())
+        }
+      }
+    })
+  }
 }
 

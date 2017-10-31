@@ -519,17 +519,28 @@ class GoogleHttpLoadBalancerCachingAgent extends AbstractGoogleLoadBalancerCachi
     }
   }
 
-  class GroupHealthCallback<BackendServiceGroupHealth> extends JsonBatchCallback<BackendServiceGroupHealth> {
-    String backendServiceName
+  private void handleGetHealth(BackendServiceGroupHealth backendServiceGroupHealth, GoogleHttpLoadBalancer googleLoadBalancer) {
+    backendServiceGroupHealth.healthStatus?.each { HealthStatus status ->
+      def instanceName = Utils.getLocalName(status.instance)
+      def googleLBHealthStatus = GoogleLoadBalancerHealth.PlatformStatus.valueOf(status.healthState)
 
-    /**
-     * Tolerate of the group health calls failing. Spinnaker reports empty load balancer healths as 'unknown'.
-     * If healthStatus is null in the onSuccess() function, the same state is reported, so this shouldn't cause issues.
-     */
-    void onFailure(GoogleJsonError e, HttpHeaders responseHeaders) throws IOException {
-      log.debug("Failed backend service group health call for backend service ${backendServiceName} for Http load balancer." +
-        " The platform error message was:\n ${e.getMessage()}.")
+      googleLoadBalancer.healths << new GoogleLoadBalancerHealth(
+        instanceName: instanceName,
+        instanceZone: Utils.getZoneFromInstanceUrl(status.instance),
+        status: googleLBHealthStatus,
+        lbHealthSummaries: [
+          new GoogleLoadBalancerHealth.LBHealthSummary(
+            loadBalancerName: googleLoadBalancer.name,
+            instanceId: instanceName,
+            state: googleLBHealthStatus.toServiceStatus(),
+          )
+        ]
+      )
     }
+  }
+
+  class GroupHealthCallback<BackendServiceGroupHealth> extends JsonBatchCallback<BackendServiceGroupHealth> implements FailedSubjectChronicler {
+    GoogleHttpLoadBalancer googleLoadBalancer
 
     @Override
     void onSuccess(BackendServiceGroupHealth backendServiceGroupHealth, HttpHeaders responseHeaders) throws IOException {

@@ -361,16 +361,17 @@ class BasicGoogleDeployHandler implements DeployHandler<BasicGoogleDeployDescrip
         null, task, "instance template " + GCEUtil.getLocalName(instanceTemplateUrl), BASE_PHASE)
 
     if (description.capacity) {
+      println ",, overriding target size: ${description.targetSize} with capacity: ${description.capacity}"
       description.targetSize = description.capacity.desired
     }
 
     if (autoscalerIsSpecified(description)) {
-      GCEUtil.calibrateTargetSizeWithAutoscaler(description)
-
       if (description.capacity) {
         description.autoscalingPolicy.minNumReplicas = description.capacity.min
         description.autoscalingPolicy.maxNumReplicas = description.capacity.max
       }
+
+      GCEUtil.calibrateTargetSizeWithAutoscaler(description)
     }
 
     if (description.source?.useSourceCapacity && description.source?.region && description.source?.serverGroupName) {

@@ -112,6 +112,7 @@ class CopyLastGoogleServerGroupAtomicOperation extends GoogleAtomicOperation<Dep
     def ancestorNames = Names.parseName(ancestorServerGroup.name)
 
     // Override any ancestor values that were specified directly on the cloneServerGroup call.
+    println ",, clone description: ${description}"
     newDescription.region = description.region ?: Utils.getLocalName(ancestorServerGroup.region)
     newDescription.regional =
         description.regional != null
@@ -134,6 +135,7 @@ class CopyLastGoogleServerGroupAtomicOperation extends GoogleAtomicOperation<Dep
         description.distributionPolicy :
         ancestorServerGroup.distributionPolicy
     newDescription.selectZones = description.selectZones ?: ancestorServerGroup.selectZones
+    println ",, new deploy description after triangulation: ${newDescription}"
 
     def ancestorInstanceTemplate = ancestorServerGroup.launchConfig.instanceTemplate
 

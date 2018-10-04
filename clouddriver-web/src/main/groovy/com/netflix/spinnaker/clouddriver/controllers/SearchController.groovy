@@ -19,7 +19,7 @@ package com.netflix.spinnaker.clouddriver.controllers
 import com.netflix.spinnaker.clouddriver.search.SearchProvider
 import com.netflix.spinnaker.clouddriver.search.SearchQueryCommand
 import com.netflix.spinnaker.clouddriver.search.SearchResultSet
-import com.netflix.spinnaker.clouddriver.search.executor.SearchExecutor
+import com.netflix.spinnaker.clouddriver.search.executor.SearchWhy
 import org.apache.log4j.Logger
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.security.access.prepost.PreAuthorize
@@ -39,7 +39,7 @@ class SearchController {
   List<SearchProvider> searchProviders
 
   @Autowired(required = false)
-  SearchExecutor searchExecutor
+  SearchWhy searchWhy
 
   /**
    * Simple search endpoint that delegates to {@link SearchProvider}s.
@@ -75,8 +75,8 @@ class SearchController {
       searchProviders
 
     List<SearchResultSet> results = []
-    if (searchExecutor) {
-      results = searchExecutor.searchAllProviders(providers, searchQuery)
+    if (searchWhy) {
+      results = searchWhy.searchAllProviders(providers, searchQuery)
     } else {
       results = searchAllProviders(providers, searchQuery)
     }
@@ -101,6 +101,7 @@ class SearchController {
 
   List<SearchResultSet> searchAllProviders(List<SearchProvider> providers,
                                            SearchQueryCommand searchQuery) {
+    println ",, why we running this"
     List<SearchResultSet> results = providers.collect {
 
       SearchProvider provider = it

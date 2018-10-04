@@ -22,9 +22,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
 @NoArgsConstructor
-@ConfigurationProperties("search.executor")
+@ConfigurationProperties("search.hystrix")
 class SearchExecutorConfigProperties {
   private Boolean enabled;
-  private Integer threadPoolSize;
-  private Integer timeout;
 }

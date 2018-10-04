@@ -22,11 +22,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnExpression("${search.executor.enabled:false}")
+@ConditionalOnExpression("${search.hystrix.enabled:false}")
 @EnableConfigurationProperties(SearchExecutorConfigProperties.class)
 public class SearchExecutorConfig {
   @Bean
-  SearchExecutor searchExecutor(SearchExecutorConfigProperties configProperties) {
-    return new SearchExecutor(configProperties);
+  SearchWhy searchWhy() {
+    return new SearchWhy();
   }
 }

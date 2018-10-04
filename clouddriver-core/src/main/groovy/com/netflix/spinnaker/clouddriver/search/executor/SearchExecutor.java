@@ -16,10 +16,19 @@
 
 package com.netflix.spinnaker.clouddriver.search.executor;
 
+import com.netflix.hystrix.HystrixCommand;
+import com.netflix.hystrix.HystrixCommandGroupKey;
+import com.netflix.hystrix.HystrixCommandKey;
+import com.netflix.hystrix.HystrixCommandProperties;
 import com.netflix.spinnaker.clouddriver.search.SearchProvider;
 import com.netflix.spinnaker.clouddriver.search.SearchQueryCommand;
 import com.netflix.spinnaker.clouddriver.search.SearchResultSet;
+import com.netflix.spinnaker.hystrix.SimpleHystrixCommand;
+import groovy.lang.Closure;
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.List;
@@ -27,80 +36,119 @@ import java.util.Map;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
-@Slf4j
+//@Component
+//@ConditionalOnExpression("${search.hystrix.enabled:false}")
 public class SearchExecutor {
-  private Integer timeout;
-  private ExecutorService executor;
-
-  SearchExecutor(SearchExecutorConfigProperties configProperties) {
-    this.timeout = configProperties.getTimeout();
-    this.executor = Executors.newFixedThreadPool(configProperties.getThreadPoolSize());
-  }
-
-  public List<SearchResultSet> searchAllProviders(List<SearchProvider> providers,
-                                                  SearchQueryCommand searchQuery) {
-    List<Callable<SearchResultSet>> searchTasks = providers.stream().
-      map(p -> new SearchTask(p, searchQuery)).
-      collect(Collectors.toList());
-    List<Future<SearchResultSet>> resultFutures = null;
-    try {
-      resultFutures = executor.invokeAll(searchTasks, timeout, TimeUnit.SECONDS);
-    } catch (InterruptedException ie) {
-      log.error(String.format("Search for '%s' in '%s' interrupted",
-                searchQuery.getQ(), searchQuery.getPlatform()), ie);
-    }
-
-    if (resultFutures == null) {
-      return Collections.EMPTY_LIST;
-    }
-    return resultFutures.stream().map(f -> getFuture(f)).collect(Collectors.toList());
-  }
-
-  private static SearchResultSet getFuture(Future<SearchResultSet> f) {
-    SearchResultSet resultSet = null;
-    try {
-      resultSet = f.get();
-    } catch (ExecutionException | InterruptedException e) {
-      log.error(String.format("Retrieving future %s failed", f), e);
-    } catch (CancellationException _) {
-      log.error(String.format("Retrieving result failed due to cancelled task: %s", f));
-    }
-
-    if (resultSet == null) {
-      return new SearchResultSet().setTotalMatches(0).setResults(Collections.EMPTY_LIST);
-    }
-    return resultSet;
-  }
-
-  private static class SearchTask implements Callable<SearchResultSet> {
-    private SearchProvider provider;
-    private SearchQueryCommand searchQuery;
-
-    SearchTask(SearchProvider provider, SearchQueryCommand searchQuery) {
-      this.provider = provider;
-      this.searchQuery = searchQuery;
-    }
-
-    public SearchResultSet call() {
-      Map<String, String> filters = searchQuery
-        .getFilters()
-        .entrySet()
-        .stream()
-        .filter(e -> !provider.excludedFilters().contains(e.getKey()))
-        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-
-      try {
-        if (searchQuery.getType() != null && !searchQuery.getType().isEmpty()) {
-          return provider.search(searchQuery.getQ(), searchQuery.getType(), searchQuery.getPage(),
-                                 searchQuery.getPageSize(), filters);
-        } else {
-          return provider.search(searchQuery.getQ(), searchQuery.getPage(), searchQuery.getPageSize(), filters);
-        }
-      } catch (Exception e) {
-        log.error(String.format("Search for '%s' in '%s' failed",
-          searchQuery.getQ(), searchQuery.getPlatform()), e);
-        return new SearchResultSet().setTotalMatches(0).setResults(Collections.EMPTY_LIST);
-      }
-    }
-  }
+//  private static final String GROUP_KEY = "SearchProviderCommand";
+//
+//  private Integer timeout;
+//  private ExecutorService executor;
+//
+//  SearchExecutor(SearchExecutorConfigProperties configProperties) {
+//    this.timeout = configProperties.getTimeout();
+//    this.executor = Executors.newFixedThreadPool(configProperties.getThreadPoolSize());
+//  }
+//
+//  public List<SearchResultSet> searchAllProviders(List<SearchProvider> providers,
+//                                                  SearchQueryCommand searchQuery) {
+//    List<SimpleHystrixCommand<SearchResultSet>> = providers.stream()
+//      .map(p -> new SimpleHystrixCommand(GROUP_KEY, p.getClass().getCanonicalName(), new SearchTask(p, searchQuery)))
+//
+//
+//
+//
+//    List<Callable<SearchResultSet>> searchTasks = providers.stream().
+//      map(p -> new SearchTask(p, searchQuery)).
+//      collect(Collectors.toList());
+//    List<Future<SearchResultSet>> resultFutures = null;
+//    try {
+//      resultFutures = executor.invokeAll(searchTasks, timeout, TimeUnit.SECONDS);
+//    } catch (InterruptedException ie) {
+//      log.error(String.format("Search for '%s' in '%s' interrupted",
+//                searchQuery.getQ(), searchQuery.getPlatform()), ie);
+//    }
+//
+//    if (resultFutures == null) {
+//      return Collections.EMPTY_LIST;
+//    }
+//    return resultFutures.stream().map(f -> getFuture(f)).collect(Collectors.toList());
+//  }
+//
+//  private SimpleHystrixCommand<SearchResultSet> createSimpleHystrixCommand(SearchProvider provider, SearchQueryCommand searchQuery) {
+//    Closure closure = new Closure(null) {
+//      public Object doCall() {
+//        new SearchTask
+//      }
+//    };
+//    return new SimpleHystrixCommand<SearchResultSet>(GROUP_KEY,
+//                                                     provider.getClass().getCanonicalName(),
+//                                                     new SearchTask(provider, searchQuery));
+//  }
+//
+////  private static SearchResultSet getFuture(Future<SearchResultSet> f) {
+////    SearchResultSet resultSet = null;
+////    try {
+////      resultSet = f.get();
+////    } catch (ExecutionException | InterruptedException e) {
+////      log.error(String.format("Retrieving future %s failed", f), e);
+////    } catch (CancellationException _) {
+////      log.error(String.format("Retrieving result failed due to cancelled task: %s", f));
+////    }
+////
+////    if (resultSet == null) {
+////      return new SearchResultSet().setTotalMatches(0).setResults(Collections.EMPTY_LIST);
+////    }
+////    return resultSet;
+////  }
+//
+//
+//
+////  private static class SearchCommand<SearchTask> extends HystrixCommand<SearchTask> {
+////
+////    protected final Callable<SearchTask> work;
+////    protected final Callable<SearchTask> fallback;
+////
+////    public SearchCommand() {}
+////
+////    public SearchCommand(Callable<SearchTask> work, Callable<SearchTask> fallback) {
+////      this.work = work;
+////      this.fallback = fallback;
+////    }
+////
+////    public SearchTask run() throws Exception {
+////      return work.call();
+////    }
+////  }
+//
+//  private static class SearchTask implements Callable<SearchResultSet> {
+//    private SearchProvider provider;
+//    private SearchQueryCommand searchQuery;
+//
+//    SearchTask(SearchProvider provider, SearchQueryCommand searchQuery) {
+//      this.provider = provider;
+//      this.searchQuery = searchQuery;
+//    }
+//
+//    public SearchResultSet call() {
+//      Map<String, String> filters = searchQuery
+//        .getFilters()
+//        .entrySet()
+//        .stream()
+//        .filter(e -> !provider.excludedFilters().contains(e.getKey()))
+//        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+//
+//      try {
+//        if (searchQuery.getType() != null && !searchQuery.getType().isEmpty()) {
+//          return provider.search(searchQuery.getQ(), searchQuery.getType(), searchQuery.getPage(),
+//                                 searchQuery.getPageSize(), filters);
+//        } else {
+//          return provider.search(searchQuery.getQ(), searchQuery.getPage(), searchQuery.getPageSize(), filters);
+//        }
+//      } catch (Exception e) {
+//        log.error(String.format("Search for '%s' in '%s' failed",
+//          searchQuery.getQ(), searchQuery.getPlatform()), e);
+//        return new SearchResultSet().setTotalMatches(0).setResults(Collections.EMPTY_LIST);
+//      }
+//    }
+//  }
 }
